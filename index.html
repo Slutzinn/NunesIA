@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Nunes AI</title>
+
+<script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          void: '#171717',
+          surface: '#212121',
+          elevated: '#2a2a2a',
+          elevated2: '#343434',
+          border: 'rgba(255,255,255,0.09)',
+          muted: '#9b9b9b',
+          danger: '#e5484d'
+        },
+        fontFamily: {
+          sans: ['Inter', 'sans-serif'],
+          mono: ['JetBrains Mono', 'monospace']
+        }
+      }
+    }
+  }
+</script>
+
+<style>
+  html, body { background:#212121; height:100%; }
+  body { font-family:'Inter', sans-serif; }
+  .font-mono { font-family:'JetBrains Mono', monospace; }
+
+  ::-webkit-scrollbar { width:7px; height:7px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:#3d3d3d; border-radius:8px; }
+  ::-webkit-scrollbar-thumb:hover { background:#4a4a4a; }
+
+  @keyframes fadeUp { from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);} }
+  .msg-enter { animation: fadeUp .22s ease-out; }
+
+  @keyframes dotBounce { 0%,80%,100%{transform:translateY(0); opacity:.35;} 40%{transform:translateY(-4px); opacity:1;} }
+  .dot { animation: dotBounce 1.2s infinite ease-in-out; }
+  .dot:nth-child(2){ animation-delay:.15s; }
+  .dot:nth-child(3){ animation-delay:.3s; }
+
+  @keyframes blink { 50%{opacity:0;} }
+  .cursor-blink { animation: blink 1s step-start infinite; }
+
+  textarea#chat-input { field-sizing: content; }
+
+  .prose-invert :where(code):not(:where(pre code)) {
+    background:#343434; color:#ececec; padding:.15rem .4rem; border-radius:.35rem; font-weight:400; font-size:.85em; font-family:'JetBrains Mono',monospace;
+  }
+  .prose-invert :where(code):not(:where(pre code))::before,
+  .prose-invert :where(code):not(:where(pre code))::after { content:""; }
+  .prose-invert pre { background:#0f0f0f; border:1px solid rgba(255,255,255,0.09); border-radius:.6rem; }
+  .prose-invert a { color:#8ab4f8; }
+  .prose-invert strong { color:#fff; }
+  .prose-invert blockquote { border-left-color:#4a4a4a; color:#b4b4b4; }
+
+  .sidebar-transition { transition: transform .25s ease; }
+</style>
+</head>
+
+<body class="h-screen overflow-hidden bg-surface text-gray-100 flex">
+
+  <!-- ===================== SIDEBAR (histórico) ===================== -->
+  <aside id="sidebar" class="sidebar-transition fixed md:static inset-y-0 left-0 z-40 w-[272px] h-full bg-void border-r border-border flex flex-col shrink-0 -translate-x-full md:translate-x-0">
+    <div class="p-2 flex items-center justify-between gap-1">
+      <button id="btn-new-chat" class="flex-1 flex items-center gap-2.5 px-3 py-2.5 rounded-lg hover:bg-elevated text-[13.5px] font-medium transition-colors">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-[17px] h-[17px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+        </svg>
+        Nova conversa
+      </button>
+      <button id="btn-close-sidebar" class="md:hidden p-2 rounded-lg hover:bg-elevated text-muted shrink-0">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+
+    <div class="px-2 pb-1">
+      <div class="relative">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-[13px] h-[13px] absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input id="session-search" placeholder="Buscar conversas" autocomplete="off"
+          class="w-full bg-transparent text-[12.5px] pl-8 pr-2.5 py-2 rounded-lg border border-border outline-none placeholder:text-muted focus:border-white/25 transition-colors">
+      </div>
+    </div>
+
+    <nav id="session-list" class="flex-1 overflow-y-auto px-2 py-1.5 flex flex-col gap-0.5"></nav>
+
+    <div class="border-t border-border p-2">
+      <button id="btn-open-settings" class="flex items-center gap-2.5 w-full px-2 py-2 rounded-lg hover:bg-elevated transition-colors">
+        <div class="w-7 h-7 rounded-full bg-elevated2 flex items-center justify-center text-[11px] font-bold shrink-0">N</div>
+        <div class="flex-1 text-left leading-tight min-w-0">
+          <p class="text-[13px] truncate">Nunes AI</p>
+          <p class="text-[11px] text-muted">Configurações</p>
+        </div>
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-muted shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+      </button>
+    </div>
+  </aside>
+
+  <div id="sidebar-backdrop" class="fixed inset-0 bg-black/60 z-30 hidden md:hidden"></div>
+
+  <!-- ===================== MAIN ===================== -->
+  <div class="flex-1 flex flex-col min-w-0 h-full">
+
+    <header class="flex items-center gap-1 px-2 sm:px-3 py-2.5 shrink-0">
+      <button id="btn-open-sidebar" class="md:hidden p-2 rounded-lg hover:bg-elevated text-muted">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-[19px] h-[19px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+
+      <div class="relative">
+        <button id="btn-model-selector" class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg hover:bg-elevated text-[15px] font-semibold transition-colors">
+          <span>Nunes AI</span>
+          <span id="model-label" class="text-muted font-normal text-[13px]"></span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </button>
+        <div id="model-menu" class="hidden absolute top-full left-0 mt-1.5 w-72 bg-elevated border border-border rounded-xl shadow-2xl py-1.5 z-30"></div>
+      </div>
+
+      <div class="ml-auto flex items-center gap-1">
+        <button id="btn-new-chat-mobile" title="Nova conversa" class="md:hidden p-2 rounded-lg hover:bg-elevated text-muted hover:text-gray-100 transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+          </svg>
+        </button>
+        <button id="btn-delete-current" title="Excluir conversa" class="p-2 rounded-lg hover:bg-elevated text-muted hover:text-gray-100 transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m5 0V4a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v2"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <main id="chat-scroll" class="flex-1 overflow-y-auto">
+      <div id="chat-container" class="max-w-3xl mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6 min-h-full"></div>
+    </main>
+
+    <div class="shrink-0">
+      <div class="max-w-3xl mx-auto px-3 sm:px-6 pb-4 pt-1">
+        <div class="flex items-end gap-2 bg-elevated border border-border rounded-[26px] px-3 py-2 focus-within:border-white/25 transition-colors">
+          <textarea id="chat-input" rows="1" placeholder="Envie uma mensagem para Nunes AI…"
+            class="flex-1 resize-none bg-transparent outline-none text-[15px] leading-relaxed placeholder:text-muted max-h-40 py-1.5"></textarea>
+          <button id="btn-send" title="Enviar" disabled
+            class="shrink-0 w-8 h-8 rounded-full bg-elevated2 text-muted disabled:cursor-not-allowed transition-all flex items-center justify-center">
+            <svg id="icon-send" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline>
+            </svg>
+            <svg id="icon-stop" xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 hidden" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="5" y="5" width="14" height="14" rx="2"></rect>
+            </svg>
+          </button>
+        </div>
+        <p class="text-[11px] text-muted text-center mt-2">Nunes AI pode cometer erros. Verifique informações importantes.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== SETTINGS MODAL ===================== -->
+  <div id="settings-modal" class="fixed inset-0 z-[60] hidden items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+    <div class="bg-void border border-border rounded-2xl w-full max-w-md max-h-[85vh] overflow-y-auto">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-border sticky top-0 bg-void">
+        <h2 class="font-semibold text-[15px]">Configurações</h2>
+        <button id="btn-close-settings" class="p-1.5 rounded-lg text-muted hover:text-gray-100 hover:bg-elevated transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="px-5 py-5 flex flex-col gap-6">
+        <div>
+          <label class="text-[13px] font-medium text-gray-200">Groq API Key</label>
+          <p class="text-[12px] text-muted mt-0.5 mb-2">Sua chave é salva apenas neste navegador (localStorage) e usada só para chamar a API da Groq.</p>
+          <div class="relative">
+            <input id="input-api-key" type="password" autocomplete="off" spellcheck="false" placeholder="gsk_••••••••••••••••••••••••"
+              class="w-full bg-elevated border border-border rounded-lg px-3 py-2.5 pr-10 text-[13px] font-mono outline-none focus:border-white/25 transition-colors placeholder:text-muted">
+            <button id="btn-toggle-key" type="button" class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted hover:text-gray-100">
+              <svg id="icon-eye" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>
+              </svg>
+            </button>
+          </div>
+          <a href="https://console.groq.com/keys" target="_blank" rel="noopener" class="inline-block mt-2 text-[12px] text-[#8ab4f8] hover:underline">Obter uma chave em console.groq.com →</a>
+        </div>
+
+        <div>
+          <label class="text-[13px] font-medium text-gray-200">Modelo padrão para novas conversas</label>
+          <p class="text-[12px] text-muted mt-0.5 mb-2">Usado sempre que você iniciar uma conversa nova. <span class="font-mono">llama-3.1-8b-instant</span> é o modelo mais econômico disponível na Groq.</p>
+          <select id="select-default-model" class="w-full bg-elevated border border-border rounded-lg px-3 py-2.5 text-[13px] font-mono outline-none focus:border-white/25 transition-colors"></select>
+        </div>
+
+        <div class="pt-1">
+          <button id="btn-save-settings" class="w-full bg-white text-black hover:bg-gray-200 active:scale-[.99] transition-all font-medium text-[13.5px] rounded-lg py-2.5">
+            Salvar
+          </button>
+          <p id="settings-saved-tag" class="text-center text-[12px] text-[#8ab4f8] opacity-0 transition-opacity mt-2">Configurações salvas ✓</p>
+        </div>
+
+        <div class="border-t border-border pt-4">
+          <button id="btn-clear-all" class="w-full text-left px-3 py-2.5 rounded-lg text-[13px] text-danger hover:bg-danger/10 transition-colors">
+            Limpar todo o histórico de conversas
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== CONFIRM MODAL (genérico) ===================== -->
+  <div id="confirm-modal" class="fixed inset-0 z-[70] hidden items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+    <div class="bg-void border border-border rounded-2xl w-full max-w-sm p-5">
+      <h3 id="confirm-title" class="font-semibold text-[15px]">Excluir conversa?</h3>
+      <p id="confirm-text" class="text-[13px] text-muted mt-1.5">Essa ação não pode ser desfeita.</p>
+      <div class="flex gap-2 mt-5">
+        <button id="btn-confirm-cancel" class="flex-1 py-2 rounded-lg text-[13.5px] font-medium bg-elevated hover:bg-elevated2 transition-colors">Cancelar</button>
+        <button id="btn-confirm-ok" class="flex-1 py-2 rounded-lg text-[13.5px] font-medium bg-danger text-white hover:brightness-110 transition-all">Excluir</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== RENAME MODAL ===================== -->
+  <div id="rename-modal" class="fixed inset-0 z-[70] hidden items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+    <div class="bg-void border border-border rounded-2xl w-full max-w-sm p-5">
+      <h3 class="font-semibold text-[15px]">Renomear conversa</h3>
+      <input id="rename-input" type="text" maxlength="80"
+        class="w-full mt-3 bg-elevated border border-border rounded-lg px-3 py-2.5 text-[13.5px] outline-none focus:border-white/25 transition-colors">
+      <div class="flex gap-2 mt-4">
+        <button id="btn-rename-cancel" class="flex-1 py-2 rounded-lg text-[13.5px] font-medium bg-elevated hover:bg-elevated2 transition-colors">Cancelar</button>
+        <button id="btn-rename-ok" class="flex-1 py-2 rounded-lg text-[13.5px] font-medium bg-white text-black hover:bg-gray-200 transition-all">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-[80] hidden max-w-[90vw] sm:max-w-md"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- Constantes ---------- */
+  const LS_KEYS = {
+    apiKey: 'nunes_ai_api_key',
+    defaultModel: 'nunes_ai_default_model',
+    sessions: 'nunes_ai_sessions',
+    currentSession: 'nunes_ai_current_session'
+  };
+  const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
+  const SYSTEM_PROMPT = 'Você é Nunes AI, um assistente de IA prestativo, direto e amigável. Responda por padrão em português do Brasil, salvo se o usuário pedir outro idioma. Utilize Markdown quando isso tornar a resposta mais clara.';
+  const FIXED_TEMPERATURE = 0.7;
+
+    // Modelos disponíveis na Groq
+  const MODELS = [
+    { id: 'llama-3.1-8b-instant',      label: 'Llama 3.1 8B',     tag: 'Rápido e eficiente' },
+    { id: 'llama-3.3-70b-versatile',   label: 'Llama 3.3 70B',    tag: 'Mais inteligente e capaz' },
+    { id: 'llama-3.1-70b-versatile',   label: 'Llama 3.1 70B',    tag: 'Equilibrado' },
+    { id: 'mixtral-8x7b-32768',        label: 'Mixtral 8x7B',     tag: 'Contexto amplo' }
+  ];
+  const DEFAULT_MODEL = 'llama-3.1-8b-instant';
+
+
+  /* ---------- Elementos ---------- */
+  const el = {
+    sidebar: document.getElementById('sidebar'),
+    sidebarBackdrop: document.getElementById('sidebar-backdrop'),
+    btnOpenSidebar: document.getElementById('btn-open-sidebar'),
+    btnCloseSidebar: document.getElementById('btn-close-sidebar'),
+    btnNewChat: document.getElementById('btn-new-chat'),
+    btnNewChatMobile: document.getElementById('btn-new-chat-mobile'),
+    sessionSearch: document.getElementById('session-search'),
+    sessionList: document.getElementById('session-list'),
+
+    btnModelSelector: document.getElementById('btn-model-selector'),
+    modelMenu: document.getElementById('model-menu'),
+    modelLabel: document.getElementById('model-label'),
+    btnDeleteCurrent: document.getElementById('btn-delete-current'),
+
+    chatScroll: document.getElementById('chat-scroll'),
+    chatContainer: document.getElementById('chat-container'),
+    input: document.getElementById('chat-input'),
+    btnSend: document.getElementById('btn-send'),
+    iconSend: document.getElementById('icon-send'),
+    iconStop: document.getElementById('icon-stop'),
+
+    btnOpenSettings: document.getElementById('btn-open-settings'),
+    settingsModal: document.getElementById('settings-modal'),
+    btnCloseSettings: document.getElementById('btn-close-settings'),
+    inputApiKey: document.getElementById('input-api-key'),
+    btnToggleKey: document.getElementById('btn-toggle-key'),
+    iconEye: document.getElementById('icon-eye'),
+    selectDefaultModel: document.getElementById('select-default-model'),
+    btnSaveSettings: document.getElementById('btn-save-settings'),
+    settingsSavedTag: document.getElementById('settings-saved-tag'),
+    btnClearAll: document.getElementById('btn-clear-all'),
+
+    confirmModal: document.getElementById('confirm-modal'),
+    confirmTitle: document.getElementById('confirm-title'),
+    confirmText: document.getElementById('confirm-text'),
+    btnConfirmCancel: document.getElementById('btn-confirm-cancel'),
+    btnConfirmOk: document.getElementById('btn-confirm-ok'),
+
+    renameModal: document.getElementById('rename-modal'),
+    renameInput: document.getElementById('rename-input'),
+    btnRenameCancel: document.getElementById('btn-rename-cancel'),
+    btnRenameOk: document.getElementById('btn-rename-ok'),
+
+    toast: document.getElementById('toast')
+  };
+
+  /* ---------- Estado ---------- */
+  let state = {
+    apiKey: localStorage.getItem(LS_KEYS.apiKey) || '',
+    defaultModel: localStorage.getItem(LS_KEYS.defaultModel) || DEFAULT_MODEL,
+    sessions: safeParseArr(localStorage.getItem(LS_KEYS.sessions), []),
+    currentSessionId: localStorage.getItem(LS_KEYS.currentSession) || null,
+    draftModel: null,
+    isStreaming: false,
+    abortController: null
+  };
+  state.draftModel = state.defaultModel;
+
+  function safeParseArr(json, fallback) {
+    try { const v = JSON.parse(json); return Array.isArray(v) ? v : fallback; }
+    catch (e) { return fallback; }
+  }
+  function uid() {
+    return (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(16).slice(2));
+  }
+
+  marked.setOptions({ breaks: true, gfm: true });
+
+  /* ---------- Utilidades ---------- */
+  function escapeHtml(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+  }
+  function renderMarkdown(text) {
+    return DOMPurify.sanitize(marked.parse(text || ''));
+  }
+  function scrollToBottom() {
+    requestAnimationFrame(() => { el.chatScroll.scrollTop = el.chatScroll.scrollHeight; });
+  }
+  function modelLabelFor(id) {
+    const m = MODELS.find(x => x.id === id);
+    return m ? m.label : id;
+  }
+  function persistSessions() {
+    localStorage.setItem(LS_KEYS.sessions, JSON.stringify(state.sessions));
+  }
+  function persistCurrentSession() {
+    if (state.currentSessionId) localStorage.setItem(LS_KEYS.currentSession, state.currentSessionId);
+    else localStorage.removeItem(LS_KEYS.currentSession);
+  }
+  function getCurrentSession() {
+    return state.sessions.find(s => s.id === state.currentSessionId) || null;
+  }
+
+  function showToast(message, type = 'error') {
+    const styles = {
+      error: 'bg-danger/15 border-danger/40 text-red-200',
+      success: 'bg-white/10 border-white/20 text-gray-100'
+    };
+    el.toast.className = `fixed bottom-5 left-1/2 -translate-x-1/2 z-[80] max-w-[90vw] sm:max-w-md border rounded-xl px-4 py-3 text-[13px] shadow-lg flex items-start gap-2 ${styles[type] || styles.error}`;
+    el.toast.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        ${type === 'error'
+          ? '<circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line>'
+          : '<path d="M20 6L9 17l-5-5"></path>'}
+      </svg>
+      <span>${escapeHtml(message)}</span>`;
+    el.toast.style.display = 'flex';
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => { el.toast.style.display = 'none'; }, 5000);
+  }
+
+  /* ================= SIDEBAR / SESSÕES ================= */
+  function dayKey(ts) {
+    const d = new Date(ts);
+    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  }
+  function groupSessions(list) {
+    const now = new Date();
+    const today = dayKey(now.getTime());
+    const y = new Date(now); y.setDate(y.getDate() - 1);
+    const yesterday = dayKey(y.getTime());
+    const sevenDaysAgo = now.getTime() - 7 * 24 * 60 * 60 * 1000;
+
+    const groups = { 'Hoje': [], 'Ontem': [], 'Últimos 7 dias': [], 'Mais antigas': [] };
+    list.forEach(s => {
+      const k = dayKey(s.updatedAt);
+      if (k === today) groups['Hoje'].push(s);
+      else if (k === yesterday) groups['Ontem'].push(s);
+      else if (s.updatedAt >= sevenDaysAgo) groups['Últimos 7 dias'].push(s);
+      else groups['Mais antigas'].push(s);
+    });
+    return groups;
+  }
+
+  function renderSidebar() {
+    const query = el.sessionSearch.value.trim().toLowerCase();
+    let list = [...state.sessions].sort((a, b) => b.updatedAt - a.updatedAt);
+    if (query) list = list.filter(s => s.title.toLowerCase().includes(query));
+
+    el.sessionList.innerHTML = '';
+
+    if (list.length === 0) {
+      el.sessionList.innerHTML = `<p class="text-[12px] text-muted text-center py-6 px-2">${query ? 'Nenhuma conversa encontrada.' : 'Suas conversas aparecerão aqui.'}</p>`;
+      return;
+    }
+
+    const groups = groupSessions(list);
+    Object.entries(groups).forEach(([label, items]) => {
+      if (items.length === 0) return;
+      const h = document.createElement('p');
+      h.className = 'text-[11px] text-muted px-2.5 pt-3 pb-1 font-medium';
+      h.textContent = label;
+      el.sessionList.appendChild(h);
+      items.forEach(s => el.sessionList.appendChild(buildSessionItem(s)));
+    });
+  }
+
+  function buildSessionItem(s) {
+    const active = s.id === state.currentSessionId;
+    const item = document.createElement('div');
+    item.className = `group relative flex items-center gap-1 rounded-lg cursor-pointer text-[13px] pr-1 ${active ? 'bg-elevated2' : 'hover:bg-elevated'}`;
+
+    const titleBtn = document.createElement('button');
+    titleBtn.className = 'flex-1 min-w-0 text-left px-2.5 py-2 truncate';
+    titleBtn.textContent = s.title || 'Nova conversa';
+    titleBtn.addEventListener('click', () => selectSession(s.id));
+
+    const actions = document.createElement('div');
+    actions.className = 'flex items-center opacity-0 group-hover:opacity-100 transition-opacity shrink-0';
+    actions.innerHTML = `
+      <button data-action="rename" title="Renomear" class="p-1.5 rounded-md hover:bg-white/10 text-muted hover:text-gray-100">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
+      </button>
+      <button data-action="delete" title="Excluir" class="p-1.5 rounded-md hover:bg-white/10 text-muted hover:text-red-300">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m5 0V4a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v2"></path></svg>
+      </button>`;
+    actions.querySelector('[data-action="rename"]').addEventListener('click', (e) => { e.stopPropagation(); openRename(s.id); });
+    actions.querySelector('[data-action="delete"]').addEventListener('click', (e) => { e.stopPropagation(); confirmDeleteSession(s.id); });
+
+    item.appendChild(titleBtn);
+    item.appendChild(actions);
+    return item;
+  }
+
+  function createDraft() {
+    state.currentSessionId = null;
+    persistCurrentSession();
+    state.draftModel = state.defaultModel;
+    updateModelLabel();
+    renderSidebar();
+    renderMessages();
+    closeSidebarMobile();
+    el.input.focus();
+  }
+
+  function ensureSessionForSend() {
+    let session = getCurrentSession();
+    if (session) return session;
+    session = {
+      id: uid(),
+      title: 'Nova conversa',
+      messages: [],
+      model: state.draftModel || state.defaultModel,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    state.sessions.unshift(session);
+    state.currentSessionId = session.id;
+    persistCurrentSession();
+    return session;
+  }
+
+  function selectSession(id) {
+    if (state.isStreaming) { showToast('Aguarde a resposta atual terminar antes de trocar de conversa.', 'error'); return; }
+    state.currentSessionId = id;
+    persistCurrentSession();
+    updateModelLabel();
+    renderSidebar();
+    renderMessages();
+    closeSidebarMobile();
+  }
+
+  function confirmDeleteSession(id) {
+    const session = state.sessions.find(s => s.id === id);
+    if (!session) return;
+    openConfirm({
+      title: 'Excluir conversa?',
+      text: `"${session.title}" será apagada permanentemente. Essa ação não pode ser desfeita.`,
+      onConfirm: () => {
+        state.sessions = state.sessions.filter(s => s.id !== id);
+        persistSessions();
+        if (state.currentSessionId === id) {
+          state.currentSessionId = null;
+          persistCurrentSession();
+        }
+        renderSidebar();
+        renderMessages();
+      }
+    });
+  }
+
+  function openRename(id) {
+    const session = state.sessions.find(s => s.id === id);
+    if (!session) return;
+    el.renameInput.value = session.title;
+    el.renameModal.classList.remove('hidden');
+    el.renameModal.classList.add('flex');
+    el.renameInput.focus();
+    el.renameInput.select();
+    el.btnRenameOk.onclick = () => {
+      const val = el.renameInput.value.trim();
+      if (val) { session.title = val; session.updatedAt = session.updatedAt; persistSessions(); renderSidebar(); }
+      hideRename();
+    };
+  }
+  function hideRename() {
+    el.renameModal.classList.add('hidden');
+    el.renameModal.classList.remove('flex');
+  }
+  el.btnRenameCancel.addEventListener('click', hideRename);
+  el.renameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') el.btnRenameOk.click(); });
+
+  el.sessionSearch.addEventListener('input', renderSidebar);
+
+  /* ---------- Confirm modal genérico ---------- */
+  function openConfirm({ title, text, onConfirm }) {
+    el.confirmTitle.textContent = title;
+    el.confirmText.textContent = text;
+    el.confirmModal.classList.remove('hidden');
+    el.confirmModal.classList.add('flex');
+    el.btnConfirmOk.onclick = () => { onConfirm(); hideConfirm(); };
+  }
+  function hideConfirm() {
+    el.confirmModal.classList.add('hidden');
+    el.confirmModal.classList.remove('flex');
+  }
+  el.btnConfirmCancel.addEventListener('click', hideConfirm);
+
+  /* ---------- Sidebar mobile ---------- */
+  function openSidebarMobile() {
+    el.sidebar.classList.remove('-translate-x-full');
+    el.sidebarBackdrop.classList.remove('hidden');
+  }
+  function closeSidebarMobile() {
+    if (window.matchMedia('(max-width: 767px)').matches) {
+      el.sidebar.classList.add('-translate-x-full');
+      el.sidebarBackdrop.classList.add('hidden');
+    }
+  }
+  el.btnOpenSidebar.addEventListener('click', openSidebarMobile);
+  el.btnCloseSidebar.addEventListener('click', closeSidebarMobile);
+  el.sidebarBackdrop.addEventListener('click', closeSidebarMobile);
+  el.btnNewChat.addEventListener('click', createDraft);
+  el.btnNewChatMobile.addEventListener('click', createDraft);
+
+  /* ================= MENSAGENS ================= */
+  function renderMessages() {
+    const session = getCurrentSession();
+    el.chatContainer.innerHTML = '';
+
+    if (!session || session.messages.length === 0) {
+      el.chatContainer.innerHTML = `
+        <div class="flex-1 flex flex-col items-center justify-center text-center py-16">
+          <div class="w-12 h-12 rounded-full bg-elevated2 flex items-center justify-center font-bold text-lg mb-4">N</div>
+          <h2 class="font-semibold text-lg">Nunes AI</h2>
+          <p class="text-muted text-[13.5px] max-w-xs mt-1.5">${state.apiKey ? 'Envie uma mensagem para começar.' : 'Configure sua API Key da Groq para começar.'}</p>
+          ${!state.apiKey ? `<button id="empty-open-settings" class="mt-4 text-[13px] font-medium bg-elevated hover:bg-elevated2 border border-border px-4 py-2 rounded-lg transition-colors">Abrir configurações</button>` : ''}
+        </div>`;
+      const btn = document.getElementById('empty-open-settings');
+      if (btn) btn.addEventListener('click', openSettings);
+      return;
+    }
+
+    session.messages.forEach(m => el.chatContainer.appendChild(buildBubble(m)));
+    scrollToBottom();
+  }
+
+  function buildBubble(m) {
+    const wrap = document.createElement('div');
+    wrap.className = 'msg-enter flex gap-3.5 ' + (m.role === 'user' ? 'justify-end' : 'justify-start');
+
+    if (m.role === 'assistant') {
+      wrap.innerHTML = `
+        <div class="w-7 h-7 rounded-full bg-elevated2 flex items-center justify-center font-bold text-[11px] shrink-0 mt-0.5">N</div>
+        <div class="flex-1 min-w-0 max-w-[85%]">
+          <div class="prose prose-invert prose-sm max-w-none leading-relaxed">${renderMarkdown(m.content)}</div>
+        </div>`;
+    } else {
+      const div = document.createElement('div');
+      div.className = 'max-w-[80%] sm:max-w-[70%] bg-elevated text-gray-100 rounded-3xl px-4 py-2.5 text-[15px] leading-relaxed whitespace-pre-wrap break-words';
+      div.textContent = m.content;
+      wrap.appendChild(div);
+      return wrap;
+    }
+    return wrap;
+  }
+
+  /* ---------- Textarea + envio ---------- */
+  function autoResize() {
+    el.input.style.height = 'auto';
+    el.input.style.height = Math.min(el.input.scrollHeight, 160) + 'px';
+  }
+  function updateSendButtonState() {
+    const hasText = el.input.value.trim().length > 0;
+    if (state.isStreaming) {
+      el.btnSend.disabled = false;
+      el.btnSend.className = 'shrink-0 w-8 h-8 rounded-full bg-white text-black transition-all flex items-center justify-center';
+    } else if (hasText) {
+      el.btnSend.disabled = false;
+      el.btnSend.className = 'shrink-0 w-8 h-8 rounded-full bg-white text-black hover:bg-gray-200 transition-all flex items-center justify-center';
+    } else {
+      el.btnSend.disabled = true;
+      el.btnSend.className = 'shrink-0 w-8 h-8 rounded-full bg-elevated2 text-muted disabled:cursor-not-allowed transition-all flex items-center justify-center';
+    }
+  }
+  el.input.addEventListener('input', () => { autoResize(); updateSendButtonState(); });
+  el.input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  });
+
+  el.btnSend.addEventListener('click', () => {
+    if (state.isStreaming) { if (state.abortController) state.abortController.abort(); return; }
+    sendMessage();
+  });
+
+  async function sendMessage() {
+    const text = el.input.value.trim();
+    if (!text || state.isStreaming) return;
+
+    if (!state.apiKey) {
+      showToast('Configure sua API Key da Groq nas Configurações antes de conversar.', 'error');
+      openSettings();
+      return;
+    }
+
+    const session = ensureSessionForSend();
+    session.messages.push({ role: 'user', content: text });
+    if (session.messages.length === 1) {
+      session.title = text.replace(/\s+/g, ' ').slice(0, 42) + (text.length > 42 ? '…' : '');
+    }
+    session.updatedAt = Date.now();
+    persistSessions();
+
+    el.input.value = '';
+    autoResize();
+    updateSendButtonState();
+    renderSidebar();
+    renderMessages();
+
+    await streamAssistantReply(session);
+  }
+
+  function setStreamingUI(isStreaming) {
+    state.isStreaming = isStreaming;
+    el.iconSend.classList.toggle('hidden', isStreaming);
+    el.iconStop.classList.toggle('hidden', !isStreaming);
+    el.btnSend.title = isStreaming ? 'Parar' : 'Enviar';
+    updateSendButtonState();
+  }
+
+  async function streamAssistantReply(session) {
+    setStreamingUI(true);
+
+    const placeholderWrap = document.createElement('div');
+    placeholderWrap.className = 'msg-enter flex gap-3.5 justify-start';
+    placeholderWrap.innerHTML = `
+      <div class="w-7 h-7 rounded-full bg-elevated2 flex items-center justify-center font-bold text-[11px] shrink-0 mt-0.5">N</div>
+      <div class="flex-1 min-w-0 max-w-[85%]">
+        <div id="live-content" class="text-[15px] leading-relaxed whitespace-pre-wrap break-words">
+          <span class="inline-flex gap-1 items-center h-4">
+            <span class="dot w-1.5 h-1.5 rounded-full bg-muted"></span>
+            <span class="dot w-1.5 h-1.5 rounded-full bg-muted"></span>
+            <span class="dot w-1.5 h-1.5 rounded-full bg-muted"></span>
+          </span>
+        </div>
+      </div>`;
+    el.chatContainer.appendChild(placeholderWrap);
+    scrollToBottom();
+    const liveContent = placeholderWrap.querySelector('#live-content');
+
+    const payloadMessages = [
+      { role: 'system', content: SYSTEM_PROMPT },
+      ...session.messages.map(m => ({ role: m.role, content: m.content }))
+    ];
+
+    state.abortController = new AbortController();
+    let accumulated = '';
+    let receivedAny = false;
+
+    try {
+      const response = await fetch(GROQ_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${state.apiKey}` },
+        body: JSON.stringify({
+          model: session.model || state.defaultModel,
+          messages: payloadMessages,
+          temperature: FIXED_TEMPERATURE,
+          stream: true
+        }),
+        signal: state.abortController.signal
+      });
+
+      if (!response.ok) {
+        let friendly = 'Ocorreu um erro ao contatar a API da Groq. Tente novamente em instantes.';
+        try {
+          const errBody = await response.json();
+          const apiMsg = errBody?.error?.message;
+          if (response.status === 401) friendly = 'Chave de API inválida ou não autorizada. Verifique sua Groq API Key nas configurações.';
+          else if (response.status === 429) friendly = 'Limite de requisições atingido na Groq. Aguarde um instante e tente novamente.';
+          else if (apiMsg && apiMsg.includes('decommissioned')) friendly = 'Este modelo foi descontinuado pela Groq. Escolha outro modelo no menu no topo da conversa.';
+          else if (apiMsg) friendly = apiMsg;
+        } catch (_) {}
+        throw new Error(friendly);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data:')) continue;
+          const dataStr = trimmed.slice(5).trim();
+          if (dataStr === '[DONE]') continue;
+          try {
+            const json = JSON.parse(dataStr);
+            const delta = json?.choices?.[0]?.delta?.content;
+            if (delta) {
+              accumulated += delta;
+              receivedAny = true;
+              liveContent.innerHTML = escapeHtml(accumulated).replace(/\n/g, '<br>') + '<span class="cursor-blink">▍</span>';
+              scrollToBottom();
+            }
+          } catch (_) {}
+        }
+      }
+
+      if (!receivedAny) throw new Error('A Groq não retornou nenhuma resposta. Tente novamente.');
+
+      session.messages.push({ role: 'assistant', content: accumulated });
+      session.updatedAt = Date.now();
+      persistSessions();
+
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        if (accumulated) {
+          session.messages.push({ role: 'assistant', content: accumulated });
+          session.updatedAt = Date.now();
+          persistSessions();
+        }
+      } else {
+        showToast(err.message || 'Não foi possível obter resposta da Groq.', 'error');
+      }
+    } finally {
+      setStreamingUI(false);
+      state.abortController = null;
+      renderSidebar();
+      renderMessages();
+    }
+  }
+
+  /* ================= SELETOR DE MODELO ================= */
+  function updateModelLabel() {
+    const session = getCurrentSession();
+    const modelId = session ? (session.model || state.defaultModel) : state.draftModel;
+    el.modelLabel.textContent = '· ' + modelLabelFor(modelId);
+  }
+
+  function buildModelMenu() {
+    el.modelMenu.innerHTML = '';
+    const session = getCurrentSession();
+    const activeId = session ? (session.model || state.defaultModel) : state.draftModel;
+
+    MODELS.forEach(m => {
+      const item = document.createElement('button');
+      item.className = 'w-full flex items-start gap-2.5 px-3.5 py-2.5 hover:bg-elevated2 text-left transition-colors';
+      item.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mt-0.5 shrink-0 ${m.id === activeId ? 'opacity-100' : 'opacity-0'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        <div class="min-w-0">
+          <p class="text-[13.5px] font-medium">${m.label}</p>
+          <p class="text-[11.5px] text-muted mt-0.5">${m.tag}</p>
+        </div>`;
+      item.addEventListener('click', () => {
+        const s = getCurrentSession();
+        if (s) { s.model = m.id; persistSessions(); }
+        else { state.draftModel = m.id; }
+        state.defaultModel = m.id;
+        localStorage.setItem(LS_KEYS.defaultModel, m.id);
+        updateModelLabel();
+        closeModelMenu();
+      });
+      el.modelMenu.appendChild(item);
+    });
+  }
+  function openModelMenu() { buildModelMenu(); el.modelMenu.classList.remove('hidden'); }
+  function closeModelMenu() { el.modelMenu.classList.add('hidden'); }
+  el.btnModelSelector.addEventListener('click', (e) => {
+    e.stopPropagation();
+    el.modelMenu.classList.contains('hidden') ? openModelMenu() : closeModelMenu();
+  });
+  document.addEventListener('click', (e) => {
+    if (!el.modelMenu.contains(e.target) && !el.btnModelSelector.contains(e.target)) closeModelMenu();
+  });
+
+  /* ================= EXCLUIR CONVERSA ATUAL ================= */
+  el.btnDeleteCurrent.addEventListener('click', () => {
+    const session = getCurrentSession();
+    if (!session) { showToast('Não há uma conversa aberta para excluir.', 'error'); return; }
+    confirmDeleteSession(session.id);
+  });
+
+  /* ================= CONFIGURAÇÕES ================= */
+  function populateModelSelect() {
+    el.selectDefaultModel.innerHTML = MODELS.map(m => `<option value="${m.id}">${m.label} — ${m.tag}</option>`).join('');
+  }
+  function openSettings() {
+    el.inputApiKey.value = state.apiKey;
+    el.selectDefaultModel.value = state.defaultModel;
+    el.settingsModal.classList.remove('hidden');
+    el.settingsModal.classList.add('flex');
+  }
+  function closeSettings() {
+    el.settingsModal.classList.add('hidden');
+    el.settingsModal.classList.remove('flex');
+  }
+  el.btnOpenSettings.addEventListener('click', openSettings);
+  el.btnCloseSettings.addEventListener('click', closeSettings);
+  el.settingsModal.addEventListener('click', (e) => { if (e.target === el.settingsModal) closeSettings(); });
+
+  el.btnToggleKey.addEventListener('click', () => {
+    const isPwd = el.inputApiKey.type === 'password';
+    el.inputApiKey.type = isPwd ? 'text' : 'password';
+    el.iconEye.innerHTML = isPwd
+      ? '<path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.8 21.8 0 0 1 5.06-6.06M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a21.8 21.8 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>'
+      : '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
+  });
+
+  el.btnSaveSettings.addEventListener('click', () => {
+    state.apiKey = el.inputApiKey.value.trim();
+    state.defaultModel = el.selectDefaultModel.value;
+    localStorage.setItem(LS_KEYS.apiKey, state.apiKey);
+    localStorage.setItem(LS_KEYS.defaultModel, state.defaultModel);
+    if (!getCurrentSession()) state.draftModel = state.defaultModel;
+
+    el.settingsSavedTag.style.opacity = '1';
+    setTimeout(() => { el.settingsSavedTag.style.opacity = '0'; }, 1800);
+
+    updateModelLabel();
+    if (!getCurrentSession() || (getCurrentSession() && getCurrentSession().messages.length === 0)) renderMessages();
+  });
+
+  el.btnClearAll.addEventListener('click', () => {
+    openConfirm({
+      title: 'Limpar todo o histórico?',
+      text: 'Todas as conversas salvas serão apagadas permanentemente. Essa ação não pode ser desfeita.',
+      onConfirm: () => {
+        state.sessions = [];
+        state.currentSessionId = null;
+        persistSessions();
+        persistCurrentSession();
+        renderSidebar();
+        renderMessages();
+        closeSettings();
+        showToast('Histórico de conversas limpo.', 'success');
+      }
+    });
+  });
+
+  /* ---------- Inicialização ---------- */
+  populateModelSelect();
+  el.inputApiKey.value = state.apiKey;
+  if (state.currentSessionId && !getCurrentSession()) { state.currentSessionId = null; persistCurrentSession(); }
+  updateModelLabel();
+  renderSidebar();
+  renderMessages();
+  updateSendButtonState();
+
+  if (!state.apiKey && state.sessions.length === 0) {
+    setTimeout(() => showToast('Bem-vindo! Configure sua Groq API Key para começar a conversar.', 'success'), 400);
+  }
+
+})();
+</script>
+</body>
+</html>
