@@ -927,6 +927,32 @@
   }
 
 })();
+
+  <script>
+  // Adiciona botão de copiar em todos os blocos de código
+  function addCopyButtons() {
+    document.querySelectorAll('pre').forEach((pre) => {
+      if (pre.querySelector('.copy-btn')) return; // Evita duplicar o botão
+
+      const btn = document.createElement('button');
+      btn.className = 'copy-btn';
+      btn.innerText = 'Copiar';
+      btn.style.cssText = 'position: absolute; top: 0.5rem; right: 0.5rem; font-size: 0.75rem; background: #343434; color: #fff; padding: 0.2rem 0.6rem; border-radius: 0.4rem; cursor: pointer; z-index: 10;';
+      
+      btn.onclick = () => {
+        navigator.clipboard.writeText(pre.innerText.replace('Copiar', '').trim());
+        btn.innerText = 'Copiado!';
+        setTimeout(() => btn.innerText = 'Copiar', 2000);
+      };
+
+      pre.style.position = 'relative'; // Necessário para posicionar o botão
+      pre.appendChild(btn);
+    });
+  }
+
+  // Monitora mudanças no DOM para aplicar o botão em novas mensagens
+  const observer = new MutationObserver(addCopyButtons);
+  observer.observe(document.body, { childList: true, subtree: true });
 </script>
 </body>
 </html>
